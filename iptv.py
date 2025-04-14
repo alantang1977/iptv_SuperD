@@ -9,10 +9,9 @@ import typing as t
 import json
 from datetime import datetime
 from itertools import islice
+
 import requests
 import zhconv
-import time
-from concurrent.futures import ThreadPoolExecutor
 
 DEBUG = os.environ.get('DEBUG') is not None
 IPTV_CONFIG = os.environ.get('IPTV_CONFIG') or 'config.ini'
@@ -37,11 +36,10 @@ logging.basicConfig(
 # REF: https://github.com/bustawin/ordered-set-37
 T = t.TypeVar("T")
 class OrderedSet(t.MutableSet[T]):
+    __slots__ = ('_d',)
+
     def __init__(self, iterable: t.Optional[t.Iterable[T]] = None):
-        self._d = OrderedDict()
-        if iterable is not None:
-            for item in iterable:
-                self.add(item)
+        self._d = dict.fromkeys(iterable) if iterable else {}
 
     def add(self, x: T) -> None:
         self._d[x] = None
@@ -53,61 +51,69 @@ class OrderedSet(t.MutableSet[T]):
         self._d.pop(x, None)
 
     def __getitem__(self, index) -> T:
-        return list(self._d.keys())[index]
+        try:
+            return next(itertools.islice(self._d, index, index + 1))
+        except StopIteration:
+            raise IndexError(f"index {index} out of range")
 
     def __contains__(self, x: object) -> bool:
-        return x in self._d
+        return self._d.__contains__(x)
 
     def __len__(self) -> int:
-        return len(self._d)
+        return self._d.__len__()
 
     def __iter__(self) -> t.Iterator[T]:
-        return iter(self._d.keys())
+        return self._d.__iter__()
 
     def __str__(self):
-        return str(list(self._d.keys()))
+        return f"{{{', '.join(str(i) for i in self)}}}"
 
     def __repr__(self):
-        return f"OrderedSet({list(self._d.keys())})"
+        return f"<OrderedSet {self}>"
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, OrderedSet):
+        if isinstance(o, set):
             return list(o)
         return super().default(o)
 
 def json_dump(obj, fp=None, **kwargs):
-    if fp is None:
-        return json.dumps(obj, cls=JSONEncoder, **kwargs)
-    return json.dump(obj, fp, cls=JSONEncoder, **kwargs)
+    kwargs.setdefault('cls', JSONEncoder)
+    kwargs.setdefault('indent', 2)
+    kwargs.setdefault('ensure_ascii', False)
+    return json.dump(obj, fp, **kwargs) if fp else json.dumps(obj, **kwargs)
 
 def conv_bool(v):
-    return ConfigParser.BOOLEAN_STATES.get(v.lower(), False)
+    if isinstance(v, bool):
+        return v
+    return ConfigParser.BOOLEAN_STATES[v.lower()]
 
 def conv_list(v):
-    return [i.strip() for i in v.split(',') if i.strip()]
+    v = v.strip().splitlines()
+    return [s.strip() for s in v if s.strip()]
 
 def conv_dict(v):
-    result = {}
-    for line in v.splitlines():
-        line = line.strip()
-        if line:
-            key, value = line.split(None, 1)
-            result[key] = value
-    return result
+    maps = {}
+    for m in conv_list(v):
+        s = re.split(r'\ +', m)
+        if len(s) != 2:
+            logging.error(f'字典配置错误: {m} => {s}')
+            continue
+        maps[s[0].strip()] = s[1].strip()
+    return maps
 
 def clean_inline_comment(v):
-    return v.split('#', 1)[0].strip()
+    def _remove_inline_comment(l):
+        try:
+            l = re.split(r' +#', l)[0]
+        except Exception as e:
+            logging.warning(f'行内注释清理出错: {l} {e}')
+        return l
+    return '\n'.join([_remove_inline_comment(s) for s in v.strip().splitlines()])
 
 def is_ipv6(url):
-    try:
-        parsed = urlparse(url)
-        netloc = parsed.netloc
-        if ':' in netloc and '[' not in netloc:
-            return True
-    except ValueError:
-        pass
-    return False
+    p = urlparse(url)
+    return re.match(r'\[[0-9a-fA-F:]+\]', p.netloc) is not None
 
 class IPTV:
     def __init__(self, *args, **kwargs):
@@ -120,13 +126,6 @@ class IPTV:
         self.raw_channels = {}
         self.channel_cates = OrderedDict()
         self.channels = {}
-        # 确保 dist 目录存在
-        self._create_dist_dir()
-
-    def _create_dist_dir(self):
-        if not os.path.exists(IPTV_DIST):
-            os.makedirs(IPTV_DIST)
-            logging.info(f"Created directory: {IPTV_DIST}")
 
     def get_config(self, key, *convs, default=None):
         if not self.raw_config:
@@ -140,6 +139,7 @@ class IPTV:
                 for conv in convs:
                     value = conv(value)
         except NoOptionError:
+            # logging.debug(f'配置未设置, 返回默认值: {key} : {default}')
             return default
         except Exception as e:
             logging.error(f'获取配置出错: {key} {e}')
@@ -349,16 +349,6 @@ class IPTV:
             logging.debug(f'映射频道名: {o_name} => {name}')
         return name
 
-    def test_response_time(self, url):
-        try:
-            start_time = time.time()
-            headers = {'User-Agent': DEF_USER_AGENT}
-            requests.get(url, timeout=DEF_REQUEST_TIMEOUT, headers=headers)
-            end_time = time.time()
-            return end_time - start_time
-        except Exception as e:
-            return None
-
     def add_channel_uri(self, name, uri):
         uri = re.sub(r'\$.*$', '', uri)
 
@@ -393,23 +383,20 @@ class IPTV:
             logging.debug(f'黑名单忽略: {name} {uri}')
             return
 
-        response_time = self.test_response_time(url)
-        if response_time is None:
-            logging.debug(f'响应时间异常，忽略: {name} {uri}')
-            return
-
         priority = DEF_WHITELIST_PRIORITY if self.is_on_whitelist(url) else 0
         for u in self.channels[name]:
             if u['uri'] == url:
                 u['count'] = u['count'] + 1
                 u['priority'] = u['count'] + priority
-                u['response_time'] = response_time
                 return
-        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url), 'response_time': response_time})
+        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url)})
+
+        # if changed:
+        #     logging.debug(f'URL cleaned: {uri} => \n                                              {p.geturl()}')
 
     def sort_channels(self):
         for k in self.channels:
-            self.channels[k].sort(key=lambda i: i.get('response_time', float('inf')))
+            self.channels[k].sort(key=lambda i: i['priority'], reverse=True)
 
     def stat_fetched_channels(self):
         line_num = sum([len(c) for c in self.channels])
@@ -426,7 +413,7 @@ class IPTV:
         return any(b in url for b in self.whitelist)
 
     def enum_channel_uri(self, name, limit=None, only_ipv4=False):
-        if name not in self.channels:  # 修复后的代码
+        if name not in self.channels:
             return []
         if limit is None:
             limit = self.get_config('limit', int, default=DEF_LINE_LIMIT)
@@ -448,25 +435,95 @@ class IPTV:
 
         if fmt == 'm3u':
             logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
-            output.append(url)
-
-        if fp:
-            fp.write('\n'.join(output))
+            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/default.png" group-title="更新信息",{day}')
+            output.append(f'{url}')
         else:
-            # 确保 dist 目录存在
-            dist_path = self.get_dist('')
-            if not os.path.exists(dist_path):
-                os.makedirs(dist_path)
+            output.append('更新信息,#genre#')
+            output.append(f'{day},{url}')
 
-            # 生成文件名
-            if fmt == 'm3u':
-                filename = f'{day}.m3u'
-            elif fmt == 'json':
-                filename = f'{day}.json'
-            else:
-                filename = f'{day}.txt'
+        output = '\n'.join(output)
+        if fp:
+            fp.write(output)
+        return output
 
-            file_path = os.path.join(dist_path, filename)
-            with open(file_path, 'w') as f:
-                f.write('\n'.join(output))    
+    def get_export_filename(self, filename, only_ipv4=False):
+        parts = filename.rsplit('.', 1)
+        if only_ipv4:
+            parts[0] = f'{parts[0]}-ipv4'
+        return '.'.join(parts)
+
+    def export_m3u(self, only_ipv4=False):
+        dst = self.get_dist('live.m3u', ipv4_suffix=only_ipv4)
+        logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
+
+        with open(dst, 'w') as fp:
+            fp.write('#EXTM3U x-tvg-url="{}"\n'.format(self.get_config('epg', default=DEF_EPG)))
+            for cate, chls in self.channel_cates.items():
+                for chl_name in chls:
+                    for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
+                        logo = self.cate_logos[cate] if cate in self.cate_logos else f'{chl_name}.png'
+                        fp.write(f'#EXTINF:-1 tvg-id="{index}" tvg-name="{chl_name}" tvg-logo="{logo_url_prefix}/{logo}" group-title="{cate}",{chl_name}\n')
+                        fp.write('{}\n'.format(uri['uri']))
+            self.export_info(fmt='m3u', fp=fp)
+        logging.info(f'导出M3U: {dst}')
+
+    def export_txt(self, only_ipv4=False):
+        dst = self.get_dist('live.txt', ipv4_suffix=only_ipv4)
+        with open(dst, 'w') as fp:
+            for cate, chls in self.channel_cates.items():
+                fp.write(f'{cate},#genre#\n')
+                for chl_name in chls:
+                    for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
+                        fp.write('{},{}\n'.format(chl_name, uri['uri']))
+                fp.write('\n\n')
+            self.export_info(fmt='txt', fp=fp)
+        logging.info(f'导出TXT: {dst}')
+
+    def export_json(self, only_ipv4=False):
+        dst = self.get_dist('raw/channel.json', ipv4_suffix=only_ipv4)
+        data = OrderedDict()
+        for cate, chls in self.channel_cates.items():
+            data.setdefault(cate, OrderedDict())
+            for chl_name in chls:
+                data[cate].setdefault(chl_name, [])
+                for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
+                    data[cate][chl_name].append(uri)
+        with open(dst, 'w') as fp:
+            json_dump(data, fp)
+        logging.info(f'导出JSON: {dst}')
+
+    def export_raw(self):
+        dst = self.get_dist('raw/source.json')
+        for k in self.raw_channels:
+            self.raw_channels[k]['lines'].sort(key=lambda i: i['count'], reverse=True)
+        with open(dst, 'w') as fp:
+            json_dump(self.raw_channels, fp)
+        logging.info(f'导出RAW: {dst}')
+
+    def export(self):
+        self.sort_channels()
+
+        self.export_m3u()
+        self.export_txt()
+
+        if EXPORT_JSON:
+            self.export_json()
+
+        if self.get_config('export_ipv4_version', conv_bool, default=False):
+            self.export_m3u(only_ipv4=True)
+            self.export_txt(only_ipv4=True)
+            if EXPORT_JSON:
+                self.export_json(only_ipv4=True)
+
+        if EXPORT_RAW:
+            self.export_raw()
+
+    def run(self):
+        self.load_channels()
+        self.fetch_sources()
+        self.export()
+
+
+if __name__ == '__main__':
+    iptv = IPTV()
+    iptv.run()
