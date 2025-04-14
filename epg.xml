@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<tv date="20250414081015 +0000" generator-info-name="alantang1977/iptv_SuperD" generator-info-url="https://github.com/alantang1977/iptv_SuperD" source-info-name="by spark " source-info-url="https://epg.112114.xyz">
+<tv date="20250414083256 +0000" generator-info-name="alantang1977/iptv_SuperD" generator-info-url="https://github.com/alantang1977/iptv_SuperD" source-info-name="by spark " source-info-url="https://epg.112114.xyz">
   <channel id="CCTV1">
     <display-name lang="zh">CCTV1</display-name>
   </channel>
@@ -12224,6 +12224,9 @@
   </programme>
   <programme channel="黑莓电影" start="20250414134000 +0800" stop="20250414153000 +0800">
     <title lang="zh">绝海的侦探</title>
+  </programme>
+  <programme channel="黑莓电影" start="20250414153000 +0800" stop="20250414171500 +0800">
+    <title lang="zh">一路惊喜</title>
   </programme>
   <channel id="黑龙江卫视">
     <display-name lang="zh">黑龙江卫视</display-name>
