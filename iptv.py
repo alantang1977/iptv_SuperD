@@ -12,6 +12,7 @@ from itertools import islice
 import requests
 import zhconv
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 DEBUG = os.environ.get('DEBUG') is not None
 IPTV_CONFIG = os.environ.get('IPTV_CONFIG') or 'config.ini'
@@ -368,23 +369,25 @@ class IPTV:
             logging.debug(f'黑名单忽略: {name} {uri}')
             return
 
-        response_time = self.test_response_time(url)
-        if response_time is None:
-            logging.debug(f'响应时间异常，忽略: {name} {uri}')
-            return
-
         priority = DEF_WHITELIST_PRIORITY if self.is_on_whitelist(url) else 0
-        for u in self.channels[name]:
-            if u['uri'] == url:
-                u['count'] = u['count'] + 1
-                u['priority'] = u['count'] + priority
-                u['response_time'] = response_time
-                return
-        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url), 'response_time': response_time})
+        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url)})
 
     def sort_channels(self):
-        for k in self.channels:
-            self.channels[k].sort(key=lambda i: i.get('response_time', float('inf')))
+        def test_and_update(channel):
+            for line in channel:
+                url = line['uri']
+                response_time = self.test_response_time(url)
+                if response_time is not None:
+                    line['response_time'] = response_time
+                else:
+                    line['response_time'] = float('inf')
+            return [line for line in channel if line['response_time'] != float('inf')]
+
+        with ThreadPoolExecutor() as executor:
+            results = list(executor.map(test_and_update, self.channels.values()))
+
+        for k, result in zip(self.channels.keys(), results):
+            self.channels[k] = sorted(result, key=lambda i: i['response_time'])
 
     def stat_fetched_channels(self):
         line_num = sum([len(c) for c in self.channels])
@@ -423,9 +426,9 @@ class IPTV:
 
         if fmt == 'm3u':
             logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            # 修复：闭合 f-string
             output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
             output.append(url)
 
         if fp:
-            fp.write('\n'.join(output))    
+            fp.write('\n'.join(output))
+    
