@@ -9,9 +9,9 @@ import typing as t
 import json
 from datetime import datetime
 from itertools import islice
-
 import requests
 import zhconv
+import time
 
 DEBUG = os.environ.get('DEBUG') is not None
 IPTV_CONFIG = os.environ.get('IPTV_CONFIG') or 'config.ini'
@@ -213,23 +213,27 @@ class IPTV:
 
     def fetch(self, url):
         headers = {'User-Agent': DEF_USER_AGENT}
-        res = requests.get(url, timeout=DEF_REQUEST_TIMEOUT, headers=headers)
-        res.raise_for_status()
-        return res
+        start_time = time.time()
+        try:
+            res = requests.get(url, timeout=DEF_REQUEST_TIMEOUT, headers=headers)
+            res.raise_for_status()
+            response_time = time.time() - start_time
+            return res, response_time
+        except Exception as e:
+            logging.warning(f'获取失败: {url} {e}')
+            return None, float('inf')
 
     def fetch_sources(self):
         sources = self.get_config('source', conv_list, default=[])
         success_count = 0
         failed_sources = []
         for url in sources:
-            try:
-                res = self.fetch(url)
-            except Exception as e:
-                logging.warning(f'获取失败: {url} {e}')
+            res, response_time = self.fetch(url)
+            if res is None:
                 failed_sources.append(url)
                 continue
             is_m3u = any('#EXTINF' in l.decode() for l in islice(res.iter_lines(), 10))
-            logging.info(f'获取成功: {"M3U" if is_m3u else "TXT"} {url}')
+            logging.info(f'获取成功: {"M3U" if is_m3u else "TXT"} {url}, 响应时间: {response_time:.2f}s')
             success_count = success_count + 1
 
             cur_cate = None
@@ -247,7 +251,7 @@ class IPTV:
                             chl_name = match.group(2).strip()
                     elif not line.startswith("#"):
                         channel_url = line.strip()
-                        self.add_channel_uri(chl_name, channel_url)
+                        self.add_channel_uri(chl_name, channel_url, response_time)
                 else:
                     if "#genre#" in line:
                         cur_cate = line.split(",")[0].strip()
@@ -256,7 +260,7 @@ class IPTV:
                         if match:
                             chl_name = match.group(1).strip()
                             channel_url = match.group(2).strip()
-                            self.add_channel_uri(chl_name, channel_url)
+                            self.add_channel_uri(chl_name, channel_url, response_time)
         logging.info(f'源读取完毕: 成功: {success_count} 失败: {len(failed_sources)}')
         if failed_sources:
             logging.warning(f'获取失败的源: {failed_sources}')
@@ -329,7 +333,7 @@ class IPTV:
             name = name.replace(' ', '')
         return name
 
-    def add_channel_for_debug(self, name, url, org_name, org_url):
+    def add_channel_for_debug(self, name, url, org_name, org_url, response_time):
         if name not in self.raw_channels:
             self.raw_channels.setdefault(name, OrderedDict(source_names=set(), source_urls=set(), lines=[]))
 
@@ -338,9 +342,10 @@ class IPTV:
 
         for u in self.raw_channels[name]['lines']:
             if u['uri'] == url:
-                u['count'] += u['count'] + 1
+                u['count'] += 1
+                u['response_time'] = min(u['response_time'], response_time)
                 return
-        self.raw_channels[name]['lines'].append({'uri': url, 'count': 1, 'ipv6': is_ipv6(url)})
+        self.raw_channels[name]['lines'].append({'uri': url, 'count': 1, 'ipv6': is_ipv6(url), 'response_time': response_time})
 
     def try_map_channel_name(self, name):
         if name in self.channel_map.keys():
@@ -349,7 +354,7 @@ class IPTV:
             logging.debug(f'映射频道名: {o_name} => {name}')
         return name
 
-    def add_channel_uri(self, name, uri):
+    def add_channel_uri(self, name, uri, response_time):
         uri = re.sub(r'\$.*$', '', uri)
 
         name = self.try_map_channel_name(name)
@@ -374,7 +379,7 @@ class IPTV:
 
         url = p.geturl() if changed else uri
 
-        self.add_channel_for_debug(name, url, org_name, uri)
+        self.add_channel_for_debug(name, url, org_name, uri, response_time)
 
         if name not in self.channels:
             return
@@ -388,142 +393,6 @@ class IPTV:
             if u['uri'] == url:
                 u['count'] = u['count'] + 1
                 u['priority'] = u['count'] + priority
+                u['response_time'] = min(u['response_time'], response_time)
                 return
-        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url)})
-
-        # if changed:
-        #     logging.debug(f'URL cleaned: {uri} => \n                                              {p.geturl()}')
-
-    def sort_channels(self):
-        for k in self.channels:
-            self.channels[k].sort(key=lambda i: i['priority'], reverse=True)
-
-    def stat_fetched_channels(self):
-        line_num = sum([len(c) for c in self.channels])
-        logging.info(f'获取的所需: 频道: {len(self.channels)} 线路: {line_num}')
-        # TODO: 输出没有获取到任何线路的频道
-
-    def is_on_blacklist(self, url):
-        # TODO: 支持regex
-        return any(b in url for b in self.blacklist)
-        # return any(re.search(re.compile(b), url) for b in self.blacklist)
-
-    def is_on_whitelist(self, url):
-        # TODO: 支持regex
-        return any(b in url for b in self.whitelist)
-
-    def enum_channel_uri(self, name, limit=None, only_ipv4=False):
-        if name not in self.channels:
-            return []
-        if limit is None:
-            limit = self.get_config('limit', int, default=DEF_LINE_LIMIT)
-        index = 0
-        for chl in self.channels[name]:
-            if only_ipv4 and chl['ipv6']:
-                continue
-            index = index + 1
-            if isinstance(limit, int) and limit > 0 and index > limit:
-                return
-            yield index, chl
-
-    def export_info(self, fmt='m3u', fp=None):
-        if self.get_config('disable_export_info', conv_bool, default=False):
-            return
-        day = datetime.now().strftime('%Y-%m-%d')
-        url = DEF_INFO_LINE
-        output = []
-
-        if fmt == 'm3u':
-            logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/default.png" group-title="更新信息",{day}')
-            output.append(f'{url}')
-        else:
-            output.append('更新信息,#genre#')
-            output.append(f'{day},{url}')
-
-        output = '\n'.join(output)
-        if fp:
-            fp.write(output)
-        return output
-
-    def get_export_filename(self, filename, only_ipv4=False):
-        parts = filename.rsplit('.', 1)
-        if only_ipv4:
-            parts[0] = f'{parts[0]}-ipv4'
-        return '.'.join(parts)
-
-    def export_m3u(self, only_ipv4=False):
-        dst = self.get_dist('live.m3u', ipv4_suffix=only_ipv4)
-        logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-
-        with open(dst, 'w') as fp:
-            fp.write('#EXTM3U x-tvg-url="{}"\n'.format(self.get_config('epg', default=DEF_EPG)))
-            for cate, chls in self.channel_cates.items():
-                for chl_name in chls:
-                    for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
-                        logo = self.cate_logos[cate] if cate in self.cate_logos else f'{chl_name}.png'
-                        fp.write(f'#EXTINF:-1 tvg-id="{index}" tvg-name="{chl_name}" tvg-logo="{logo_url_prefix}/{logo}" group-title="{cate}",{chl_name}\n')
-                        fp.write('{}\n'.format(uri['uri']))
-            self.export_info(fmt='m3u', fp=fp)
-        logging.info(f'导出M3U: {dst}')
-
-    def export_txt(self, only_ipv4=False):
-        dst = self.get_dist('live.txt', ipv4_suffix=only_ipv4)
-        with open(dst, 'w') as fp:
-            for cate, chls in self.channel_cates.items():
-                fp.write(f'{cate},#genre#\n')
-                for chl_name in chls:
-                    for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
-                        fp.write('{},{}\n'.format(chl_name, uri['uri']))
-                fp.write('\n\n')
-            self.export_info(fmt='txt', fp=fp)
-        logging.info(f'导出TXT: {dst}')
-
-    def export_json(self, only_ipv4=False):
-        dst = self.get_dist('raw/channel.json', ipv4_suffix=only_ipv4)
-        data = OrderedDict()
-        for cate, chls in self.channel_cates.items():
-            data.setdefault(cate, OrderedDict())
-            for chl_name in chls:
-                data[cate].setdefault(chl_name, [])
-                for index, uri in self.enum_channel_uri(chl_name, only_ipv4=only_ipv4):
-                    data[cate][chl_name].append(uri)
-        with open(dst, 'w') as fp:
-            json_dump(data, fp)
-        logging.info(f'导出JSON: {dst}')
-
-    def export_raw(self):
-        dst = self.get_dist('raw/source.json')
-        for k in self.raw_channels:
-            self.raw_channels[k]['lines'].sort(key=lambda i: i['count'], reverse=True)
-        with open(dst, 'w') as fp:
-            json_dump(self.raw_channels, fp)
-        logging.info(f'导出RAW: {dst}')
-
-    def export(self):
-        self.sort_channels()
-
-        self.export_m3u()
-        self.export_txt()
-
-        if EXPORT_JSON:
-            self.export_json()
-
-        if self.get_config('export_ipv4_version', conv_bool, default=False):
-            self.export_m3u(only_ipv4=True)
-            self.export_txt(only_ipv4=True)
-            if EXPORT_JSON:
-                self.export_json(only_ipv4=True)
-
-        if EXPORT_RAW:
-            self.export_raw()
-
-    def run(self):
-        self.load_channels()
-        self.fetch_sources()
-        self.export()
-
-
-if __name__ == '__main__':
-    iptv = IPTV()
-    iptv.run()
+        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count':
