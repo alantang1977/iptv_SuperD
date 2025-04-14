@@ -120,6 +120,13 @@ class IPTV:
         self.raw_channels = {}
         self.channel_cates = OrderedDict()
         self.channels = {}
+        # 确保 dist 目录存在
+        self._create_dist_dir()
+
+    def _create_dist_dir(self):
+        if not os.path.exists(IPTV_DIST):
+            os.makedirs(IPTV_DIST)
+            logging.info(f"Created directory: {IPTV_DIST}")
 
     def get_config(self, key, *convs, default=None):
         if not self.raw_config:
@@ -419,49 +426,4 @@ class IPTV:
         return any(b in url for b in self.whitelist)
 
     def enum_channel_uri(self, name, limit=None, only_ipv4=False):
-        if name not in self.channels:
-            return []
-        if limit is None:
-            limit = self.get_config('limit', int, default=DEF_LINE_LIMIT)
-        index = 0
-        for chl in self.channels[name]:
-            if only_ipv4 and chl['ipv6']:  # 修复后的代码
-                continue
-            index = index + 1
-            if isinstance(limit, int) and limit > 0 and index > limit:
-                return
-            yield index, chl
-
-    def export_info(self, fmt='m3u', fp=None):
-        if self.get_config('disable_export_info', conv_bool, default=False):
-            return
-        day = datetime.now().strftime('%Y-%m-%d')
-        url = DEF_INFO_LINE
-        output = []
-
-        if fmt == 'm3u':
-            logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
-            output.append(url)
-
-        if fp:
-            fp.write('\n'.join(output))
-        else:
-            # 确保 dist 目录存在
-            dist_path = self.get_dist('')
-            if not os.path.exists(dist_path):
-                os.makedirs(dist_path)
-
-            # 生成文件名
-            if fmt == 'm3u':
-                filename = f'{day}.m3u'
-            elif fmt == 'json':
-                filename = f'{day}.json'
-            else:
-                filename = f'{day}.txt'
-
-            file_path = os.path.join(dist_path, filename)
-            with open(file_path, 'w') as f:
-                f.write('\n'.join(output))
-
-    
+        if name not
