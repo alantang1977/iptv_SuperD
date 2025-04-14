@@ -8,7 +8,7 @@ from io import StringIO, BytesIO
 from iptv import IPTV, logging, conv_dict, clean_inline_comment
 
 EPG_GZ_DISABLED = os.environ.get('EPG_GZ_DISABLED') or False
-EPG_SOURCE = os.environ.get('EPG_SOURCE') or 'http://epg.51zmt.top:8000/e.xml.gz'
+EPG_SOURCE = os.environ.get('EPG_SOURCE') or 'https://epg.v1.mk/fy.xml'
 EPG_CHANNEL_MAP = os.environ.get('EPG_CHANNEL_MAP') or 'epg.txt'
 
 _info_name_keys = ['generator-info-name', 'info-name', 'source-info-name']
@@ -89,7 +89,7 @@ class EPG:
 
         def _normalize(n, u):
             # 51zmt name url 信息写反
-            if 'epg.51zmt.top' in u or 'epg.51zmt.top' in n:
+            if 'epg.v1.mk' in u or 'epg.v1.mk' in n:
                 n, u = u, n
             return n, u
 
@@ -102,8 +102,8 @@ class EPG:
         root.attrib.clear()
         now = datetime.datetime.now(datetime.UTC)
         root.set('date', now.strftime('%Y%m%d%H%M%S +0000'))
-        root.set('generator-info-name', 'JinnLynn/iptv')
-        root.set('generator-info-url', 'https://github.com/JinnLynn/iptv')
+        root.set('generator-info-name', 'alantang1977/iptv_SuperD')
+        root.set('generator-info-url', 'https://github.com/alantang1977/iptv_SuperD')
         root.set('source-info-name', info_name)
         root.set('source-info-url', info_url or EPG_SOURCE)
 
