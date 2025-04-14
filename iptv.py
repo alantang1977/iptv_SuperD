@@ -423,4 +423,9 @@ class IPTV:
 
         if fmt == 'm3u':
             logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url
+            # 修复：闭合 f-string
+            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
+            output.append(url)
+
+        if fp:
+            fp.write('\n'.join(output))    
