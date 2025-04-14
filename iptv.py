@@ -12,7 +12,6 @@ from itertools import islice
 import requests
 import zhconv
 import time
-from concurrent.futures import ThreadPoolExecutor
 
 DEBUG = os.environ.get('DEBUG') is not None
 IPTV_CONFIG = os.environ.get('IPTV_CONFIG') or 'config.ini'
@@ -37,59 +36,77 @@ logging.basicConfig(
 # REF: https://github.com/bustawin/ordered-set-37
 T = t.TypeVar("T")
 class OrderedSet(t.MutableSet[T]):
-    ...
-
     def __init__(self, iterable: t.Optional[t.Iterable[T]] = None):
-        pass # function body is omitted
+        self._d = OrderedDict()
+        if iterable is not None:
+            for item in iterable:
+                self.add(item)
 
     def add(self, x: T) -> None:
-        pass # function body is omitted
+        self._d[x] = None
 
     def clear(self) -> None:
         self._d.clear()
 
     def discard(self, x: T) -> None:
-        pass # function body is omitted
+        self._d.pop(x, None)
 
     def __getitem__(self, index) -> T:
-        pass # function body is omitted
+        return list(self._d.keys())[index]
 
     def __contains__(self, x: object) -> bool:
-        pass # function body is omitted
+        return x in self._d
 
     def __len__(self) -> int:
-        pass # function body is omitted
+        return len(self._d)
 
     def __iter__(self) -> t.Iterator[T]:
-        pass # function body is omitted
+        return iter(self._d.keys())
 
     def __str__(self):
-        pass # function body is omitted
+        return str(list(self._d.keys()))
 
     def __repr__(self):
-        pass # function body is omitted
+        return f"OrderedSet({list(self._d.keys())})"
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):
-        pass # function body is omitted
+        if isinstance(o, OrderedSet):
+            return list(o)
+        return super().default(o)
 
 def json_dump(obj, fp=None, **kwargs):
-    pass # function body is omitted
+    if fp is None:
+        return json.dumps(obj, cls=JSONEncoder, **kwargs)
+    return json.dump(obj, fp, cls=JSONEncoder, **kwargs)
 
 def conv_bool(v):
-    pass # function body is omitted
+    return ConfigParser.BOOLEAN_STATES.get(v.lower(), False)
 
 def conv_list(v):
-    pass # function body is omitted
+    return [i.strip() for i in v.split(',') if i.strip()]
 
 def conv_dict(v):
-    pass # function body is omitted
+    result = {}
+    for line in v.splitlines():
+        line = line.strip()
+        if line:
+            key, value = line.split(None, 1)
+            result[key] = value
+    return result
 
 def clean_inline_comment(v):
-    pass # function body is omitted
+    return v.split('#', 1)[0].strip()
 
 def is_ipv6(url):
-    pass # function body is omitted
+    try:
+        parsed = urlparse(url)
+        netloc = parsed.netloc
+        if ':' in netloc and '[' not in netloc:
+            return True
+    except ValueError:
+        pass
+    return False
 
 class IPTV:
     def __init__(self, *args, **kwargs):
@@ -115,7 +132,6 @@ class IPTV:
                 for conv in convs:
                     value = conv(value)
         except NoOptionError:
-            # logging.debug(f'配置未设置, 返回默认值: {key} : {default}')
             return default
         except Exception as e:
             logging.error(f'获取配置出错: {key} {e}')
@@ -384,21 +400,8 @@ class IPTV:
         self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url), 'response_time': response_time})
 
     def sort_channels(self):
-        def test_and_update(channel):
-            for line in channel:
-                url = line['uri']
-                response_time = self.test_response_time(url)
-                if response_time is not None:
-                    line['response_time'] = response_time
-                else:
-                    line['response_time'] = float('inf')
-            return [line for line in channel if line['response_time'] != float('inf')]
-
-        with ThreadPoolExecutor() as executor:
-            results = list(executor.map(test_and_update, self.channels.values()))
-
-        for k, result in zip(self.channels.keys(), results):
-            self.channels[k] = sorted(result, key=lambda i: i['response_time'])
+        for k in self.channels:
+            self.channels[k].sort(key=lambda i: i.get('response_time', float('inf')))
 
     def stat_fetched_channels(self):
         line_num = sum([len(c) for c in self.channels])
@@ -421,44 +424,4 @@ class IPTV:
             limit = self.get_config('limit', int, default=DEF_LINE_LIMIT)
         index = 0
         for chl in self.channels[name]:
-            if only_ipv4 and chl['ipv6']:
-                continue
-            index = index + 1
-            if isinstance(limit, int) and limit > 0 and index > limit:
-                return
-            yield index, chl
-
-    def export_info(self, fmt='m3u', fp=None):
-        if self.get_config('disable_export_info', conv_bool, default=False):
-            return
-        day = datetime.now().strftime('%Y-%m-%d')
-        url = DEF_INFO_LINE
-        output = []
-
-        if fmt == 'm3u':
-            logo_url_prefix = self.get_config('logo_url_prefix', lambda s: s.rstrip('/'))
-            output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
-            output.append(url)
-
-        # 确保 dist 目录存在
-        dist_path = self.get_dist('')
-        if not os.path.exists(dist_path):
-            os.makedirs(dist_path)
-
-        # 生成文件名
-        if fmt == 'm3u':
-            filename = f'{day}.m3u'
-        elif fmt == 'json':
-            filename = f'{day}.json'
-        else:
-            filename = f'{day}.txt'
-
-        file_path = os.path.join(dist_path, filename)
-
-        if fp:
-            fp.write('\n'.join(output))
-        else:
-            with open(file_path, 'w') as f:
-                f.write('\n'.join(output))
-
-    
+            if only_ipv4 and
