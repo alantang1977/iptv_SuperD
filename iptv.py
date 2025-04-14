@@ -36,323 +36,157 @@ logging.basicConfig(
 # REF: https://github.com/bustawin/ordered-set-37
 T = t.TypeVar("T")
 class OrderedSet(t.MutableSet[T]):
+    ...
+
     def __init__(self, iterable: t.Optional[t.Iterable[T]] = None):
-        self._d = OrderedDict()
-        if iterable is not None:
-            for item in iterable:
-                self._d[item] = None
+        pass # function body is omitted
 
     def add(self, x: T) -> None:
-        self._d[x] = None
+        pass # function body is omitted
 
     def clear(self) -> None:
         self._d.clear()
 
     def discard(self, x: T) -> None:
-        self._d.pop(x, None)
+        pass # function body is omitted
 
     def __getitem__(self, index) -> T:
-        return list(self._d.keys())[index]
+        pass # function body is omitted
 
     def __contains__(self, x: object) -> bool:
-        return x in self._d
+        pass # function body is omitted
 
     def __len__(self) -> int:
-        return len(self._d)
+        pass # function body is omitted
 
     def __iter__(self) -> t.Iterator[T]:
-        return iter(self._d.keys())
+        pass # function body is omitted
 
     def __str__(self):
-        return str(list(self._d.keys()))
+        pass # function body is omitted
 
     def __repr__(self):
-        return f"OrderedSet({list(self._d.keys())})"
+        pass # function body is omitted
 
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):
-        if isinstance(o, OrderedSet):
-            return list(o)
-        return super().default(o)
+        pass # function body is omitted
 
 def json_dump(obj, fp=None, **kwargs):
-    if fp:
-        json.dump(obj, fp, cls=JSONEncoder, **kwargs)
-    else:
-        return json.dumps(obj, cls=JSONEncoder, **kwargs)
+    pass # function body is omitted
 
 def conv_bool(v):
-    if isinstance(v, str):
-        v = v.lower()
-        return v in ('true', '1', 'yes')
-    return bool(v)
+    pass # function body is omitted
 
 def conv_list(v):
-    if isinstance(v, str):
-        return [i.strip() for i in v.split(',') if i.strip()]
-    return v
+    pass # function body is omitted
 
 def conv_dict(v):
-    if isinstance(v, str):
-        result = {}
-        items = v.split(',')
-        for item in items:
-            if '=' in item:
-                key, value = item.split('=', 1)
-                result[key.strip()] = value.strip()
-        return result
-    return v
+    pass # function body is omitted
 
 def clean_inline_comment(v):
-    return re.sub(r'#.*$', '', v).strip()
+    pass # function body is omitted
 
 def is_ipv6(url):
-    parsed = urlparse(url)
-    netloc = parsed.netloc
-    if ':' in netloc and '.' not in netloc:
-        return True
-    return False
+    pass # function body is omitted
 
 class IPTV:
     def __init__(self, *args, **kwargs):
-        self.config = ConfigParser()
-        self.config.read(IPTV_CONFIG)
-        self.channels = OrderedDict()
-        self.cate_logos = {}  # 改为普通类属性
-        self.channel_map = {}
-        self.blacklist = OrderedSet()
-        self.whitelist = OrderedSet()
-        self.load_channels()
-
-    def get_config(self, key, *convs, default=None):
-        try:
-            value = self.config.get('iptv', key)
-            for conv in convs:
-                value = conv(value)
-            return value
-        except NoOptionError:
-            return default
-
-    def _get_path(self, dist, filename):
-        return os.path.join(dist, filename)
-
-    def get_dist(self, filename, ipv4_suffix=False):
-        if ipv4_suffix:
-            base, ext = os.path.splitext(filename)
-            filename = f"{base}{DEF_IPV4_FILENAME_SUFFIX}{ext}"
-        return self._get_path(IPTV_DIST, filename)
-
-    def get_cate_logos(self):
-        logos = self.get_config('cate_logos', conv_dict)
-        return logos if logos else {}
+        self._channel_map = {}  # 使用一个私有属性来存储 channel_map 的值
 
     @property
     def channel_map(self):
-        channel_map = self.get_config('channel_map', conv_dict)
-        return channel_map if channel_map else {}
+        return self._channel_map
+
+    @channel_map.setter
+    def channel_map(self, value):
+        self._channel_map = value
+
+    def get_config(self, key, *convs, default=None):
+        pass # function body is omitted
+
+    def _get_path(self, dist, filename):
+        pass # function body is omitted
+
+    def get_dist(self, filename, ipv4_suffix=False):
+        pass # function body is omitted
+
+    @property
+    def cate_logos(self):
+        pass # function body is omitted
 
     @property
     def blacklist(self):
-        blacklist = self.get_config('blacklist', conv_list)
-        return OrderedSet(blacklist) if blacklist else OrderedSet()
+        pass # function body is omitted
 
     @property
     def whitelist(self):
-        whitelist = self.get_config('whitelist', conv_list)
-        return OrderedSet(whitelist) if whitelist else OrderedSet()
+        pass # function body is omitted
 
     def load_channels(self):
-        try:
-            with open(IPTV_CHANNEL, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = clean_inline_comment(line)
-                    if not line:
-                        continue
-                    parts = line.split(',', 1)
-                    if len(parts) == 2:
-                        name, url = parts
-                        name = name.strip()
-                        url = url.strip()
-                        if name and url:
-                            if name not in self.channels:
-                                self.channels[name] = OrderedSet()
-                            self.channels[name].add(url)
-        except FileNotFoundError:
-            logging.error(f"Channel file {IPTV_CHANNEL} not found.")
+        pass # function body is omitted
 
     def fetch(self, url):
-        try:
-            headers = {
-                'User-Agent': DEF_USER_AGENT
-            }
-            response = requests.get(url, headers=headers, timeout=DEF_REQUEST_TIMEOUT)
-            response.raise_for_status()
-            return response.text
-        except requests.RequestException as e:
-            logging.error(f"Failed to fetch {url}: {e}")
-            return None
+        pass # function body is omitted
 
     def fetch_sources(self):
-        source_urls = self.get_config('source_urls', conv_list)
-        if source_urls:
-            for url in source_urls:
-                content = self.fetch(url)
-                if content:
-                    lines = content.splitlines()
-                    for i in range(0, len(lines), 2):
-                        if i + 1 < len(lines):
-                            info_line = lines[i]
-                            url_line = lines[i + 1]
-                            # 简单解析，假设info_line包含频道名
-                            match = re.search(r'tvg-name="([^"]+)"', info_line)
-                            if match:
-                                name = match.group(1)
-                                url = url_line.strip()
-                                if name and url:
-                                    if name not in self.channels:
-                                        self.channels[name] = OrderedSet()
-                                    self.channels[name].add(url)
+        pass # function body is omitted
 
     def is_port_necessary(self, scheme, netloc):
-        default_ports = {
-            'http': 80,
-            'https': 443
-        }
-        if ':' in netloc:
-            host, port_str = netloc.rsplit(':', 1)
-            try:
-                port = int(port_str)
-                if scheme in default_ports and port == default_ports[scheme]:
-                    return False
-            except ValueError:
-                pass
-        return True
+        pass # function body is omitted
 
     def clean_channel_name(self, name):
-        name = zhconv.convert(name, 'zh-cn')
-        name = re.sub(r'[^\u4e00-\u9fa5a-zA-Z0-9 ]', '', name)
-        return name.strip()
+        pass # function body is omitted
 
     def add_channel_for_debug(self, name, url, org_name, org_url):
-        if DEBUG:
-            if name not in self.channels:
-                self.channels[name] = OrderedSet()
-            self.channels[name].add(url)
+        pass # function body is omitted
 
     def try_map_channel_name(self, name):
-        return self.channel_map.get(name, name)
+        pass # function body is omitted
 
     def add_channel_uri(self, name, uri):
-        if name not in self.channels:
-            self.channels[name] = OrderedSet()
-        self.channels[name].add(uri)
+        pass # function body is omitted
 
     def sort_channels(self):
-        self.channels = OrderedDict(sorted(self.channels.items()))
+        pass # function body is omitted
 
     def stat_fetched_channels(self):
-        total_channels = len(self.channels)
-        total_urls = sum(len(urls) for urls in self.channels.values())
-        logging.info(f"Fetched {total_channels} channels with {total_urls} URLs.")
+        pass # function body is omitted
 
     def is_on_blacklist(self, url):
-        for pattern in self.blacklist:
-            if re.search(pattern, url):
-                return True
-        return False
+        # TODO: 支持regex
+        pass # function body is omitted
 
     def is_on_whitelist(self, url):
-        for pattern in self.whitelist:
-            if re.search(pattern, url):
-                return True
-        return False
+        # TODO: 支持regex
+        pass # function body is omitted
 
     def enum_channel_uri(self, name, limit=None, only_ipv4=False):
-        uris = self.channels.get(name, [])
-        if only_ipv4:
-            uris = [uri for uri in uris if not is_ipv6(uri)]
-        if limit:
-            uris = islice(uris, limit)
-        return uris
+        pass # function body is omitted
 
     def export_info(self, fmt='m3u', fp=None):
-        if fmt == 'm3u':
-            self.export_m3u(fp=fp)
-        elif fmt == 'txt':
-            self.export_txt(fp=fp)
-        elif fmt == 'json':
-            self.export_json(fp=fp)
+        pass # function body is omitted
 
     def get_export_filename(self, filename, only_ipv4=False):
-        if only_ipv4:
-            base, ext = os.path.splitext(filename)
-            filename = f"{base}{DEF_IPV4_FILENAME_SUFFIX}{ext}"
-        return filename
+        pass # function body is omitted
 
-    def export_m3u(self, only_ipv4=False, fp=None):
-        if not fp:
-            filename = self.get_export_filename('channels.m3u', only_ipv4)
-            dist_path = self.get_dist(filename)
-            fp = open(dist_path, 'w', encoding='utf-8')
-        fp.write(f"#EXTM3U url-tvg=\"{DEF_EPG}\"\n")
-        for name, uris in self.channels.items():
-            for uri in self.enum_channel_uri(name, limit=DEF_LINE_LIMIT, only_ipv4=only_ipv4):
-                if self.is_on_blacklist(uri):
-                    continue
-                info_line = f"#EXTINF:-1 tvg-name=\"{name}\",{name}\n"
-                fp.write(info_line)
-                fp.write(f"{uri}\n")
-        if not isinstance(fp, str):
-            fp.close()
+    def export_m3u(self, only_ipv4=False):
+        pass # function body is omitted
 
-    def export_txt(self, only_ipv4=False, fp=None):
-        if not fp:
-            filename = self.get_export_filename('channels.txt', only_ipv4)
-            dist_path = self.get_dist(filename)
-            fp = open(dist_path, 'w', encoding='utf-8')
-        for name, uris in self.channels.items():
-            for uri in self.enum_channel_uri(name, limit=DEF_LINE_LIMIT, only_ipv4=only_ipv4):
-                if self.is_on_blacklist(uri):
-                    continue
-                fp.write(f"{name},{uri}\n")
-        if not isinstance(fp, str):
-            fp.close()
+    def export_txt(self, only_ipv4=False):
+        pass # function body is omitted
 
-    def export_json(self, only_ipv4=False, fp=None):
-        data = {}
-        for name, uris in self.channels.items():
-            valid_uris = [uri for uri in self.enum_channel_uri(name, limit=DEF_LINE_LIMIT, only_ipv4=only_ipv4) if not self.is_on_blacklist(uri)]
-            if valid_uris:
-                data[name] = valid_uris
-        if not fp:
-            filename = self.get_export_filename('channels.json', only_ipv4)
-            dist_path = self.get_dist(filename)
-            with open(dist_path, 'w', encoding='utf-8') as f:
-                json_dump(data, f, ensure_ascii=False, indent=4)
-        else:
-            json_dump(data, fp, ensure_ascii=False, indent=4)
+    def export_json(self, only_ipv4=False):
+        pass # function body is omitted
 
     def export_raw(self):
-        if EXPORT_RAW:
-            self.export_info(fmt='m3u')
-            self.export_info(fmt='txt')
-            self.export_info(fmt='json')
+        pass # function body is omitted
 
     def export(self):
-        self.export_info(fmt='m3u')
-        self.export_info(fmt='m3u', only_ipv4=True)
-        self.export_info(fmt='txt')
-        self.export_info(fmt='txt', only_ipv4=True)
-        if EXPORT_JSON:
-            self.export_info(fmt='json')
-            self.export_info(fmt='json', only_ipv4=True)
+        pass # function body is omitted
 
     def run(self):
-        self.fetch_sources()
-        self.sort_channels()
-        self.stat_fetched_channels()
-        self.export_raw()
-        self.export()
+        pass # function body is omitted
 
 
 if __name__ == '__main__':
