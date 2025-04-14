@@ -395,4 +395,17 @@ class IPTV:
                 u['priority'] = u['count'] + priority
                 u['response_time'] = min(u['response_time'], response_time)
                 return
-        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count':
+        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'response_time': response_time})
+
+    def is_on_blacklist(self, url):
+        return any(re.search(pattern, url) for pattern in self.blacklist)
+
+    def is_on_whitelist(self, url):
+        return any(re.search(pattern, url) for pattern in self.whitelist)
+
+    def stat_fetched_channels(self):
+        total_channels = len(self.channels)
+        total_lines = sum(len(lines) for lines in self.channels.values())
+        logging.info(f'获取到的频道数量: {total_channels}, 线路数量: {total_lines}')
+
+    
