@@ -118,7 +118,7 @@ class IPTV:
         self.config = ConfigParser()
         self.config.read(IPTV_CONFIG)
         self.channels = OrderedDict()
-        self.cate_logos = {}
+        self.cate_logos = {}  # 改为普通类属性
         self.channel_map = {}
         self.blacklist = OrderedSet()
         self.whitelist = OrderedSet()
@@ -142,8 +142,7 @@ class IPTV:
             filename = f"{base}{DEF_IPV4_FILENAME_SUFFIX}{ext}"
         return self._get_path(IPTV_DIST, filename)
 
-    @property
-    def cate_logos(self):
+    def get_cate_logos(self):
         logos = self.get_config('cate_logos', conv_dict)
         return logos if logos else {}
 
@@ -354,6 +353,7 @@ class IPTV:
         self.stat_fetched_channels()
         self.export_raw()
         self.export()
+
 
 if __name__ == '__main__':
     iptv = IPTV()
