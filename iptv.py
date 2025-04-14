@@ -369,8 +369,19 @@ class IPTV:
             logging.debug(f'黑名单忽略: {name} {uri}')
             return
 
+        response_time = self.test_response_time(url)
+        if response_time is None:
+            logging.debug(f'响应时间异常，忽略: {name} {uri}')
+            return
+
         priority = DEF_WHITELIST_PRIORITY if self.is_on_whitelist(url) else 0
-        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url)})
+        for u in self.channels[name]:
+            if u['uri'] == url:
+                u['count'] = u['count'] + 1
+                u['priority'] = u['count'] + priority
+                u['response_time'] = response_time
+                return
+        self.channels[name].append({'uri': url, 'priority': priority + 1, 'count': 1, 'ipv6': is_ipv6(url), 'response_time': response_time})
 
     def sort_channels(self):
         def test_and_update(channel):
@@ -429,6 +440,25 @@ class IPTV:
             output.append(f'#EXTINF:-1 tvg-id="1" tvg-name="{day}" tvg-logo="{logo_url_prefix}/{day}.png",{day}')
             output.append(url)
 
+        # 确保 dist 目录存在
+        dist_path = self.get_dist('')
+        if not os.path.exists(dist_path):
+            os.makedirs(dist_path)
+
+        # 生成文件名
+        if fmt == 'm3u':
+            filename = f'{day}.m3u'
+        elif fmt == 'json':
+            filename = f'{day}.json'
+        else:
+            filename = f'{day}.txt'
+
+        file_path = os.path.join(dist_path, filename)
+
         if fp:
             fp.write('\n'.join(output))
+        else:
+            with open(file_path, 'w') as f:
+                f.write('\n'.join(output))
+
     
