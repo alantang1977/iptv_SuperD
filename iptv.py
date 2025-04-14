@@ -408,4 +408,39 @@ class IPTV:
         total_lines = sum(len(lines) for lines in self.channels.values())
         logging.info(f'获取到的频道数量: {total_channels}, 线路数量: {total_lines}')
 
+    def sort_channels_by_response_time(self):
+        for channel, lines in self.channels.items():
+            self.channels[channel] = sorted(lines, key=lambda x: x['response_time'])
+
+    def export_m3u(self, filename, ipv4_suffix=False):
+        path = self.get_dist(filename, ipv4_suffix)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write('#EXTM3U\n')
+            for cate, channels in self.channel_cates.items():
+                for channel in channels:
+                    if channel in self.channels:
+                        lines = self.channels[channel]
+                        for line in lines:
+                            f.write(f'#EXTINF:-1 group-title="{cate}",{channel}\n')
+                            f.write(f'{line["uri"]}\n')
+
+    def export_txt(self, filename, ipv4_suffix=False):
+        path = self.get_dist(filename, ipv4_suffix)
+        with open(path, 'w', encoding='utf-8') as f:
+            for cate, channels in self.channel_cates.items():
+                for channel in channels:
+                    if channel in self.channels:
+                        lines = self.channels[channel]
+                        for line in lines:
+                            f.write(f'{channel},{line["uri"]}\n')
+
+
+if __name__ == "__main__":
+    iptv = IPTV()
+    iptv.load_channels()
+    iptv.fetch_sources()
+    iptv.sort_channels_by_response_time()
+    iptv.export_m3u('live.m3u')
+    iptv.export_txt('live.txt')
+
     
