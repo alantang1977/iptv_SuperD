@@ -1,3 +1,30 @@
+<div align="center">
+  <img src="./static/images/logo.png" alt="logo"/>
+  <h1 align="center">iptv_SuperD</h1>
+</div>
+
+<div align="center">一个可高度自定义的IPTV接口更新项目📺， 自动收集整理。</div>
+<br>
+<p align="center">
+  <a href="https://github.com/alantang1977/iptv_SuperD/releases">
+    <img src="https://img.shields.io/github/v/release/alantang1977/iptv_SuperD" />
+  </a>
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/python-%20%3D%203.13-47c219" />
+  </a>
+  <a href="https://github.com/alantang1977/iptv_SuperD/releases">
+    <img src="https://img.shields.io/github/downloads/alantang1977/iptv_SuperD/total" />
+  </a>
+  <a href="https://github.com/alantang1977/iptv_SuperD">
+    <img src="https://img.shields.io/github/stars/alantang1977/iptv_SuperD" />
+  </a>
+  <a href="https://github.com/alantang1977/iptv_SuperD/fork">
+    <img src="https://img.shields.io/github/forks/alantang1977/iptv_SuperD" />
+  </a>
+</p>
+
+
+
 # IPTV
 
 IPTV相关，适合个性化自定义...
