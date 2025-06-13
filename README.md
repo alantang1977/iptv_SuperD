@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/alantang1977/X/main/Pictures/TV.png" alt="logo"/>
+  <img src="https://raw.githubusercontent.com/alantang1977/X/main/Pictures/SuperMAN.png" alt="logo"/>
   <h1 align="center">iptv_SuperD</h1>
 </div>
 
